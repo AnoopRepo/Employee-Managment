@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Anoop Yadav",
+    "email": "anoopyadav598@gmail.com",
+    "password": "$2b$12$Cu8eUJ4VEj2oU6hbXaIzu.aRhSQ9WsE8gcNEkVfGrrXEWVTZLLTU6",
+    "role": "user",
+    "created_at": "2026-05-20T05:53:31.699744",
+    "_id": "6a0d4c5bfd019034a6416e10",
+    "id": "6a0d4c5bfd019034a6416e10"
+  },
+  {
+    "name": "Anoop Yadav",
+    "email": "anoopyadav5984@gmail.com",
+    "password": "$2b$12$/k6mI9nIzVOmWZAqAjk5fefcRiZqzy2encwUmJMKeI8CZyC77j/la",
+    "role": "admin",
+    "created_at": "2026-05-20T05:55:56.566441",
+    "_id": "6a0d4cecfd019034a6416e11",
+    "id": "6a0d4cecfd019034a6416e11"
+  }
+]
