@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth, API_URL } from '../context/AuthContext';
 
 const Dashboard = () => {
@@ -189,6 +190,111 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Analytics Trend Chart */}
+        {filteredReports.length > 0 && (
+          <div className="backdrop-blur-xl bg-white/[0.03] border border-white/5 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl animate-fadeIn">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+              <div>
+                <h3 className="text-lg font-extrabold text-white">Productivity Trend Analysis</h3>
+                <p className="text-xs text-white/40 mt-1">Comparing tracked hours and checklist completion percentages over your recent updates.</p>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-semibold select-none">
+                <span className="flex items-center gap-1.5 text-purple-400">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-400"></span>
+                  Completion %
+                </span>
+                <span className="flex items-center gap-1.5 text-cyan-400">
+                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+                  Tracked Hours
+                </span>
+              </div>
+            </div>
+            
+            {/* SVG Trend Line Chart */}
+            <div className="relative w-full h-64 md:h-80 select-none">
+              <svg className="w-full h-full" viewBox="0 0 500 200" preserveAspectRatio="none">
+                <defs>
+                  {/* Gradients */}
+                  <linearGradient id="compGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgb(168, 85, 247)" stopOpacity="0.2"/>
+                    <stop offset="100%" stopColor="rgb(168, 85, 247)" stopOpacity="0"/>
+                  </linearGradient>
+                  <linearGradient id="hoursGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgb(34, 211, 238)" stopOpacity="0.2"/>
+                    <stop offset="100%" stopColor="rgb(34, 211, 238)" stopOpacity="0"/>
+                  </linearGradient>
+                </defs>
+
+                {/* Grid Lines */}
+                <line x1="0" y1="40" x2="500" y2="40" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                <line x1="0" y1="100" x2="500" y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                <line x1="0" y1="160" x2="500" y2="160" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+
+                {/* Render SVG Paths and areas */}
+                {(() => {
+                  const chartData = [...filteredReports].reverse().slice(-7);
+                  if (chartData.length === 0) return null;
+
+                  const widthStep = 500 / Math.max(chartData.length - 1, 1);
+                  
+                  // Map values to coordinates
+                  const compPoints = chartData.map((d, idx) => ({
+                    x: idx * widthStep,
+                    y: 180 - (d.completion / 100) * 160
+                  }));
+
+                  const hoursPoints = chartData.map((d, idx) => ({
+                    x: idx * widthStep,
+                    y: 180 - (Math.min(d.hours, 12) / 12) * 160
+                  }));
+
+                  const compPath = compPoints.map(p => `${p.x},${p.y}`).join(" L ");
+                  const hoursPath = hoursPoints.map(p => `${p.x},${p.y}`).join(" L ");
+
+                  const compArea = `${compPoints[0].x},180 L ${compPath} L ${compPoints[compPoints.length - 1].x},180 Z`;
+                  const hoursArea = `${hoursPoints[0].x},180 L ${hoursPath} L ${hoursPoints[hoursPoints.length - 1].x},180 Z`;
+
+                  return (
+                    <>
+                      {/* Areas */}
+                      <path d={`M ${compArea}`} fill="url(#compGradient)" />
+                      <path d={`M ${hoursArea}`} fill="url(#hoursGradient)" />
+
+                      {/* Lines */}
+                      <path d={`M ${compPath}`} fill="none" stroke="rgb(168, 85, 247)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                      <path d={`M ${hoursPath}`} fill="none" stroke="rgb(34, 211, 238)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]" />
+
+                      {/* Points / Circles */}
+                      {compPoints.map((p, i) => (
+                        <g key={`c-${i}`} className="group cursor-pointer">
+                          <circle cx={p.x} cy={p.y} r="4.5" fill="rgb(168, 85, 247)" stroke="#0f172a" strokeWidth="2" className="transition-all hover:r-6 duration-300" />
+                          <title>{`Completion: ${chartData[i].completion}% on ${chartData[i].date}`}</title>
+                        </g>
+                      ))}
+                      {hoursPoints.map((p, i) => (
+                        <g key={`h-${i}`} className="group cursor-pointer">
+                          <circle cx={p.x} cy={p.y} r="4" fill="rgb(34, 211, 238)" stroke="#0f172a" strokeWidth="1.5" className="transition-all hover:r-5.5 duration-300" />
+                          <title>{`Tracked Time: ${chartData[i].hours} Hrs on ${chartData[i].date}`}</title>
+                        </g>
+                      ))}
+                    </>
+                  );
+                })()}
+              </svg>
+            </div>
+            
+            {/* X-axis labels */}
+            <div className="flex justify-between px-2 text-[10px] font-bold text-white/30 uppercase tracking-wider select-none border-t border-white/5 pt-3">
+              {(() => {
+                const chartData = [...filteredReports].reverse().slice(-7);
+                return chartData.map((d, i) => (
+                  <span key={`lbl-${i}`} className="truncate max-w-[60px] md:max-w-[100px]">{d.date.slice(5)}</span>
+                ));
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* Dashboard Filters Row */}
         <div className="backdrop-blur-xl bg-white/5 border border-white/5 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-3 gap-6 shadow-lg">
           {/* Search bar */}
@@ -252,10 +358,25 @@ const Dashboard = () => {
               <button onClick={fetchReports} className="mt-4 px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-xl text-sm font-medium hover:bg-red-500/30 transition-all cursor-pointer">Try Again</button>
             </div>
           ) : filteredReports.length === 0 ? (
-            <div className="backdrop-blur-xl bg-white/5 border border-white/5 rounded-2xl py-20 text-center text-white/50 shadow-md">
-              <span className="text-4xl mb-4 block">📂</span>
-              <p className="font-semibold text-lg text-white/70">No status logs recorded</p>
-              <p className="text-sm text-white/40 mt-1 max-w-sm mx-auto">No reports match your filters or no daily reports have been submitted.</p>
+            <div className="backdrop-blur-3xl bg-slate-950/40 border border-white/5 rounded-3xl py-20 px-8 text-center text-white/50 shadow-2xl relative overflow-hidden animate-fadeIn group">
+              <div className="absolute inset-0 bg-gradient-to-tr from-purple-500/5 via-transparent to-blue-500/5 pointer-events-none"></div>
+              {/* Dynamic glowing icon */}
+              <div className="relative w-20 h-20 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 rounded-2xl flex items-center justify-center border border-purple-500/20 text-purple-400 mx-auto mb-6 shadow-[0_0_30px_rgba(168,85,247,0.15)] group-hover:scale-105 transition-transform duration-500">
+                <div className="absolute inset-0 rounded-2xl bg-purple-500/5 blur-md"></div>
+                <svg className="w-10 h-10 drop-shadow-[0_0_8px_rgba(168,85,247,0.6)] animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 13h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="font-extrabold text-xl text-white tracking-tight">No status logs found</p>
+              <p className="text-sm text-white/40 mt-2 max-w-xs mx-auto leading-relaxed">No reports match your active filters or no daily logs have been submitted to the workspace repository.</p>
+              <div className="mt-8">
+                <Link 
+                  to="/" 
+                  className="inline-flex px-5 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:opacity-90 text-white text-xs font-black uppercase tracking-wider rounded-xl transition shadow-lg shadow-purple-500/10 cursor-pointer"
+                >
+                  📝 Submit First Log
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">

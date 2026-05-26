@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const ProtectedRoute = ({ children, adminOnly = false }) => {
+const ProtectedRoute = ({ children, adminOnly = false, hrOnly = false, allowedRoles = null }) => {
   const { user, loading } = useAuth();
 
   // Premium glassmorphic loading animation
@@ -23,8 +23,21 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Handle Admin Authorization
-  if (adminOnly && user.role !== 'admin') {
+  const role = (user?.role || '').toLowerCase();
+  const dept = (user?.department || '').toLowerCase();
+  
+  const isAdministrator = role === 'administrator';
+  const hasHR = isAdministrator || role === 'hr' || (role === 'admin' && dept === 'hr');
+  const hasIT = isAdministrator || role === 'it' || (role === 'admin' && (dept === 'it' || dept === 'it ops'));
+  const hasAdmin = isAdministrator || (role === 'admin' && dept !== 'hr' && dept !== 'it' && dept !== 'it ops');
+
+  const isUnauthorized = (
+    (hrOnly && !hasHR) ||
+    (adminOnly && !hasAdmin) ||
+    (allowedRoles && !isAdministrator && !allowedRoles.map(r => r.toLowerCase()).includes(role))
+  );
+
+  if (isUnauthorized) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] relative overflow-hidden p-6">
         <div className="absolute top-1/2 left-1/4 w-96 h-96 bg-red-500/10 rounded-full mix-blend-screen filter blur-[100px] animate-pulse pointer-events-none"></div>
@@ -35,7 +48,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
           </div>
           <h2 className="text-2xl font-bold text-red-400 mb-4">Unauthorized Access</h2>
           <p className="text-white/70 mb-6 text-sm leading-relaxed">
-            This workspace requires administrative privileges. You do not have permissions to access this page.
+            This workspace requires {adminOnly ? 'administrative' : hrOnly ? 'HR' : 'specific role'} privileges. You do not have permissions to access this page.
           </p>
           <a
             href="/"

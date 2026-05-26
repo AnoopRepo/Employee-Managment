@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+import os
 from app.database import get_database, close_database
-from app.routes import auth, reports, users
-
+from app.routes import auth, reports, users, admin_routes, tickets, attendance, leaves, hr_extended
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,6 +30,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files directory for media uploads (like audio clips)
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Root Endpoint
 @app.get("/")
 def read_root():
@@ -38,3 +43,10 @@ def read_root():
 app.include_router(auth.router)
 app.include_router(reports.router)
 app.include_router(users.router)
+app.include_router(admin_routes.router)
+app.include_router(tickets.router)
+app.include_router(attendance.router)
+app.include_router(leaves.router)
+app.include_router(hr_extended.router)
+
+

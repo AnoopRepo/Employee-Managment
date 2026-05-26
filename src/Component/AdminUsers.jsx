@@ -3,22 +3,45 @@ import { useAuth, API_URL } from '../context/AuthContext';
 
 const AdminUsers = () => {
   const { token, user: loggedInUser } = useAuth();
+  const isSuperAdmin = loggedInUser?.is_super_admin || loggedInUser?.role === 'administrator';
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
 
+  // Edit State
   const [editingUser, setEditingUser] = useState(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
-  const [editRole, setEditRole] = useState('user');
+  const [editRole, setEditRole] = useState('general');
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState(false);
 
+  // Delete State
   const [deletingUser, setDeletingUser] = useState(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  // Add Employee State
+  const [addingUser, setAddingUser] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
+  const [addPassword, setAddPassword] = useState('');
+  const [addRole, setAddRole] = useState('general');
+  const [addDepartment, setAddDepartment] = useState('Engineering');
+  const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState(false);
+
+  // Edit Employee Department State
+  const [editDepartment, setEditDepartment] = useState('Engineering');
+
+  useEffect(() => {
+    if (loggedInUser?.department) {
+      setAddDepartment(loggedInUser.department);
+    }
+  }, [loggedInUser]);
 
   const fetchUsers = async () => {
     try {
@@ -46,6 +69,7 @@ const AdminUsers = () => {
     setEditName(u.name);
     setEditEmail(u.email);
     setEditRole(u.role);
+    setEditDepartment(u.department || 'Engineering');
     setEditError('');
     setEditSuccess(false);
   };
@@ -54,7 +78,8 @@ const AdminUsers = () => {
     setEditingUser(null);
     setEditName('');
     setEditEmail('');
-    setEditRole('user');
+    setEditRole('general');
+    setEditDepartment('Engineering');
     setEditError('');
     setEditSuccess(false);
   };
@@ -68,17 +93,58 @@ const AdminUsers = () => {
       const response = await fetch(`${API_URL}/api/users/${editingUser.id}`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName, email: editEmail, role: editRole })
+        body: JSON.stringify({ name: editName, email: editEmail, role: editRole, department: editDepartment })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Failed to update user profile');
-      setUsers(users.map(u => u.id === editingUser.id ? { ...u, name: editName, email: editEmail, role: editRole } : u));
+      setUsers(users.map(u => u.id === editingUser.id ? { ...u, name: editName, email: editEmail, role: editRole, department: editDepartment } : u));
       setEditSuccess(true);
       setTimeout(() => handleCloseEdit(), 1200);
     } catch (err) {
       setEditError(err.message);
     } finally {
       setEditSubmitting(false);
+    }
+  };
+
+  const handleSaveAdd = async (e) => {
+    e.preventDefault();
+    setAddError('');
+    setAddSuccess(false);
+    setAddSubmitting(true);
+    try {
+      const response = await fetch(`${API_URL}/api/users`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({ 
+          name: addName, 
+          email: addEmail, 
+          password: addPassword,
+          role: addRole,
+          department: addDepartment
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to create new account');
+      setUsers([data, ...users]);
+      setAddSuccess(true);
+      setTimeout(() => {
+        setAddingUser(false);
+        setAddName('');
+        setAddEmail('');
+        setAddPassword('');
+        setAddRole('general');
+        setAddDepartment('Engineering');
+        setAddSuccess(false);
+        setAddError('');
+      }, 1200);
+    } catch (err) {
+      setAddError(err.message);
+    } finally {
+      setAddSubmitting(false);
     }
   };
 
@@ -109,8 +175,8 @@ const AdminUsers = () => {
   });
 
   const totalUsers = users.length;
-  const staffCount = users.filter(u => u.role === 'user').length;
-  const adminCount = users.filter(u => u.role === 'admin').length;
+  const staffCount = users.filter(u => u.role === 'general' || u.role === 'user').length;
+  const adminCount = users.filter(u => u.role === 'admin' || u.role === 'administrator').length;
 
   return (
     <div className="min-h-[calc(100vh-4rem)] p-6 md:p-10 relative overflow-hidden text-white animate-fadeIn">
@@ -130,15 +196,24 @@ const AdminUsers = () => {
               Manage all registered accounts, assign privilege roles, and control workspace access.
             </p>
           </div>
-          <button
-            onClick={fetchUsers}
-            className="self-start md:self-auto flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 rounded-xl transition-all text-xs font-semibold uppercase tracking-wider cursor-pointer"
-          >
-            <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3m0 0l3 3m-3-3v12" />
-            </svg>
-            Sync Roster
-          </button>
+          
+          <div className="flex flex-wrap gap-3 self-start md:self-auto">
+            <button
+              onClick={() => setAddingUser(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-purple-500/20 border border-purple-500/30 hover:bg-purple-500/30 hover:border-purple-500/40 rounded-xl transition-all text-xs font-bold uppercase tracking-wider cursor-pointer text-purple-300 shadow-lg shadow-purple-500/5"
+            >
+              ➕ Add Employee
+            </button>
+            <button
+              onClick={fetchUsers}
+              className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 rounded-xl transition-all text-xs font-semibold uppercase tracking-wider cursor-pointer"
+            >
+              <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3m0 0l3 3m-3-3v12" />
+              </svg>
+              Sync Roster
+            </button>
+          </div>
         </div>
 
         {/* ── Stat Cards ── */}
@@ -156,9 +231,9 @@ const AdminUsers = () => {
               iconBg: 'bg-purple-500/10 border-purple-500/20 text-purple-400',
             },
             {
-              label: 'Staff Members',
+              label: 'General Staff',
               value: `${staffCount}`,
-              sub: 'Report submissions',
+              sub: 'Department members',
               icon: (
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -217,8 +292,11 @@ const AdminUsers = () => {
               style={{ backgroundImage: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%23ffffff\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 1rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25rem' }}
             >
               <option value="All">All Roles</option>
-              <option value="user">Staff Member</option>
-              <option value="admin">Administrator</option>
+              <option value="general">general</option>
+              <option value="it">it</option>
+              <option value="hr">hr</option>
+              <option value="admin">admin</option>
+              <option value="administrator">administrator</option>
             </select>
           </div>
         </div>
@@ -294,19 +372,25 @@ const AdminUsers = () => {
                           </td>
                           <td className="py-4 px-6 font-mono text-xs text-white/50">{u.email}</td>
                           <td className="py-4 px-6">
-                            {u.role === 'admin' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-red-500/10 text-red-300 border-red-500/20">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                </svg>
-                                Admin
+                            {u.role === 'administrator' ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-purple-500/10 text-purple-300 border-purple-500/20">
+                                administrator
+                              </span>
+                            ) : u.role === 'admin' ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-red-500/10 text-red-300 border-red-500/20">
+                                admin
+                              </span>
+                            ) : u.role === 'hr' ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-emerald-500/10 text-emerald-300 border-emerald-500/20">
+                                hr
+                              </span>
+                            ) : u.role === 'it' ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-blue-500/10 text-blue-300 border-blue-500/20">
+                                it
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-emerald-500/10 text-emerald-300 border-emerald-500/20">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
-                                Staff
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-green-500/10 text-green-300 border-green-500/20">
+                                general
                               </span>
                             )}
                           </td>
@@ -350,6 +434,143 @@ const AdminUsers = () => {
           )}
         </div>
       </div>
+
+      {/* ── Add Employee Modal ── */}
+      {addingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
+          <div className="relative w-full max-w-md bg-slate-950/90 border border-purple-500/20 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500"></div>
+
+            {/* Modal header */}
+            <div className="flex items-center justify-between p-6 border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-purple-500/10 border border-purple-500/20 rounded-lg flex items-center justify-center text-purple-400">➕</div>
+                <div>
+                  <h3 className="text-sm font-black text-white">Add New Employee</h3>
+                  <p className="text-[10px] text-white/40">Register a new profile in WorkPulse</p>
+                </div>
+              </div>
+              <button onClick={() => setAddingUser(false)} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer">
+                <svg className="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              {addError && (
+                <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {addError}
+                </div>
+              )}
+              {addSuccess && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  New employee account successfully generated!
+                </div>
+              )}
+
+              <form onSubmit={handleSaveAdd} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
+                    required
+                    placeholder="e.g. Ellen Ripley"
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-purple-400 focus:ring-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    required
+                    placeholder="you@company.com"
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-purple-400 focus:ring-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Default Password</label>
+                  <input
+                    type="password"
+                    value={addPassword}
+                    onChange={(e) => setAddPassword(e.target.value)}
+                    required
+                    placeholder="Min. 6 characters"
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-purple-400 focus:ring-1"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Department</label>
+                    {isSuperAdmin ? (
+                      <select
+                        value={addDepartment}
+                        onChange={(e) => setAddDepartment(e.target.value)}
+                        className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                      >
+                        <option value="Engineering">Engineering</option>
+                        <option value="IT Ops">IT Ops</option>
+                        <option value="Quality Assurance">Quality Assurance</option>
+                        <option value="Sales & Marketing">Sales & Marketing</option>
+                        <option value="Customer Support">Customer Support</option>
+                        <option value="HR">HR</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Operations">Operations</option>
+                      </select>
+                    ) : (
+                      <div className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 text-xs text-white/60 flex items-center gap-2">
+                        🔒 <span>{addDepartment}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Privilege Role</label>
+                    <select
+                      value={addRole}
+                      onChange={(e) => setAddRole(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none font-bold"
+                    >
+                      <option value="general">general</option>
+                      <option value="it">it</option>
+                      <option value="hr">hr</option>
+                      {isSuperAdmin && <option value="admin">admin</option>}
+                      {isSuperAdmin && <option value="administrator">administrator</option>}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-3 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setAddingUser(false)}
+                    className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addSubmitting}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 rounded-xl text-xs font-black uppercase tracking-wider text-white disabled:opacity-50 transition-all shadow-lg"
+                  >
+                    {addSubmitting ? 'Creating…' : 'Create User'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Edit Modal ── */}
       {editingUser && (
@@ -420,25 +641,17 @@ const AdminUsers = () => {
                 {/* Role selector */}
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Privilege Role</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { val: 'user', label: 'Staff Member', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
-                      { val: 'admin', label: 'Administrator', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> },
-                    ].map((r) => (
-                      <div
-                        key={r.val}
-                        onClick={() => setEditRole(r.val)}
-                        className={`p-3.5 rounded-xl border flex flex-col items-center gap-1 cursor-pointer transition-all duration-200 ${
-                          editRole === r.val
-                            ? 'bg-purple-500/10 border-purple-400/50 shadow-[0_0_16px_rgba(168,85,247,0.1)]'
-                            : 'bg-white/[0.03] border-white/10 hover:bg-white/5 hover:border-white/20'
-                        }`}
-                      >
-                        <span className={editRole === r.val ? 'text-purple-400' : 'text-white/40'}>{r.icon}</span>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-white/70">{r.label}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none font-bold"
+                  >
+                    <option value="general">general</option>
+                    <option value="it">it</option>
+                    <option value="hr">hr</option>
+                    {isSuperAdmin && <option value="admin">admin</option>}
+                    {isSuperAdmin && <option value="administrator">administrator</option>}
+                  </select>
                 </div>
 
                 <div className="flex gap-3 pt-2 border-t border-white/5">
@@ -479,7 +692,7 @@ const AdminUsers = () => {
                 This will permanently remove <strong className="text-white">{deletingUser.name}</strong> and all of their submitted daily work reports.
               </p>
               <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-3 text-red-300/80 text-[10px] text-left mb-5 leading-relaxed">
-                ⚠ This action is irreversible. All report logs will be cascade-deleted.
+                ⚠️ This action is irreversible. All report logs will be cascade-deleted.
               </div>
               <div className="flex gap-3">
                 <button

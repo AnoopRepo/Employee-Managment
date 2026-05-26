@@ -25,12 +25,18 @@ async def create_report(report_in: ReportCreate, current_user: dict = Depends(ge
 @router.get("", response_model=List[ReportResponse])
 async def list_reports(current_user: dict = Depends(get_current_user)):
     db = get_database()
+    role = current_user.get("role")
+    is_super = current_user.get("is_super_admin", False) or current_user.get("role") == "administrator"
     
-    # If admin, fetch all reports
-    if current_user.get("role") == "admin":
-        cursor = db.reports.find().sort("created_at", -1)
+    if role in ("admin", "administrator"):
+        if is_super:
+            cursor = db.reports.find().sort("created_at", -1)
+        else:
+            dept = current_user.get("department")
+            users = await db.users.find({"department": dept}).to_list(length=1000)
+            user_ids = [str(u["_id"]) for u in users]
+            cursor = db.reports.find({"user_id": {"$in": user_ids}}).sort("created_at", -1)
     else:
-        # Standard user, fetch only their own reports
         cursor = db.reports.find({"user_id": current_user["id"]}).sort("created_at", -1)
         
     reports = []
@@ -43,17 +49,34 @@ async def list_reports(current_user: dict = Depends(get_current_user)):
 @router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_report(report_id: str, current_user: dict = Depends(check_admin_role)):
     db = get_database()
+    is_super = current_user.get("is_super_admin", False) or current_user.get("role") == "administrator"
     
     try:
+        report = await db.reports.find_one({"_id": ObjectId(report_id)})
+        if not report:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Report not found"
+            )
+            
+        if not is_super:
+            report_owner_id = report.get("user_id")
+            owner = await db.users.find_one({"_id": ObjectId(report_owner_id)})
+            if not owner or owner.get("department") != current_user.get("department"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to delete reports for other departments"
+                )
+                
         result = await db.reports.delete_one({"_id": ObjectId(report_id)})
         if result.deleted_count == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Report not found"
             )
+    except HTTPException:
+        raise
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid report ID format"

@@ -32,6 +32,17 @@ class MockCursor:
         self._index += 1
         return doc
 
+    async def to_list(self, length=None):
+        if length is None:
+            res = self.documents[self._index:]
+            self._index = len(self.documents)
+            return res
+        else:
+            end = min(self._index + length, len(self.documents))
+            res = self.documents[self._index:end]
+            self._index = end
+            return res
+
 class MockCollection:
     def __init__(self, collection_name):
         self.name = collection_name
@@ -48,11 +59,12 @@ class MockCollection:
                 data = json.load(f)
                 # Convert ISO strings back to datetime and ensure _id exists
                 for doc in data:
-                    if "created_at" in doc and isinstance(doc["created_at"], str):
-                        try:
-                            doc["created_at"] = datetime.fromisoformat(doc["created_at"])
-                        except ValueError:
-                            pass
+                    for k in ("created_at", "last_updated"):
+                        if k in doc and isinstance(doc[k], str):
+                            try:
+                                doc[k] = datetime.fromisoformat(doc[k])
+                            except ValueError:
+                                pass
                 return data
         except Exception:
             return []
@@ -63,27 +75,94 @@ class MockCollection:
             d = doc.copy()
             if "_id" in d:
                 d["_id"] = str(d["_id"])
-            if "created_at" in d and isinstance(d["created_at"], datetime):
-                d["created_at"] = d["created_at"].isoformat()
+            for k, v in d.items():
+                if isinstance(v, datetime):
+                    d[k] = v.isoformat()
             serializable_docs.append(d)
         with open(self.file_path, "w") as f:
             json.dump(serializable_docs, f, indent=2)
 
+    def _match_query(self, doc, query):
+        if not query:
+            return True
+        
+        # Handle $or query
+        if "$or" in query:
+            sub_queries = query["$or"]
+            for sq in sub_queries:
+                if self._match_query(doc, sq):
+                    return True
+            return False
+            
+        for k, v in query.items():
+            if k == "_id" or k == "id":
+                doc_id = str(doc.get("_id", doc.get("id")))
+                val_id = str(v)
+                if doc_id != val_id:
+                    return False
+            elif k.endswith("_id") or isinstance(v, ObjectId) or isinstance(doc.get(k), ObjectId):
+                doc_val = doc.get(k)
+                if doc_val is None or str(doc_val) != str(v):
+                    return False
+            elif isinstance(v, dict):
+                doc_val = doc.get(k)
+                for op, val in v.items():
+                    if op == "$regex":
+                        import re
+                        if doc_val is None or not re.search(val, str(doc_val)):
+                            return False
+                    elif op == "$gte":
+                        if doc_val is None or doc_val < val:
+                            return False
+                    elif op == "$lte":
+                        if doc_val is None or doc_val > val:
+                            return False
+                    elif op == "$gt":
+                        if doc_val is None or doc_val <= val:
+                            return False
+                    elif op == "$lt":
+                        if doc_val is None or doc_val >= val:
+                            return False
+                    elif op == "$ne":
+                        if doc_val == val:
+                            return False
+                    elif op == "$in":
+                        if doc_val not in val:
+                            return False
+            else:
+                doc_val = doc.get(k)
+                # If field in doc is a list (like attendees), check if v is in the list
+                if isinstance(doc_val, list):
+                    if v not in doc_val:
+                        return False
+                elif doc_val != v:
+                    return False
+        return True
+
+    async def replace_one(self, query, replacement):
+        docs = self._load_docs()
+        replaced = False
+        for i, doc in enumerate(docs):
+            if self._match_query(doc, query):
+                if "_id" in doc and "_id" not in replacement:
+                    replacement["_id"] = doc["_id"]
+                if "id" in doc and "id" not in replacement:
+                    replacement["id"] = doc["id"]
+                docs[i] = replacement
+                replaced = True
+                break
+        if replaced:
+            self._save_docs(docs)
+        
+        class MockReplaceResult:
+            def __init__(self, modified_count):
+                self.modified_count = modified_count
+        return MockReplaceResult(1 if replaced else 0)
+
     async def find_one(self, query):
         docs = self._load_docs()
         for doc in docs:
-            match = True
-            for k, v in query.items():
-                if k == "_id" or k == "id":
-                    doc_id = str(doc.get("_id", doc.get("id")))
-                    val_id = str(v)
-                    if doc_id != val_id:
-                        match = False
-                        break
-                elif doc.get(k) != v:
-                    match = False
-                    break
-            if match:
+            if self._match_query(doc, query):
                 if "_id" not in doc and "id" in doc:
                     doc["_id"] = ObjectId(doc["id"])
                 elif "_id" in doc:
@@ -113,22 +192,7 @@ class MockCollection:
         docs = self._load_docs()
         matched = []
         for doc in docs:
-            match = True
-            for k, v in query.items():
-                if k == "_id" or k == "id":
-                    doc_id = str(doc.get("_id", doc.get("id")))
-                    val_id = str(v)
-                    if doc_id != val_id:
-                        match = False
-                        break
-                elif k == "user_id":
-                    if str(doc.get("user_id")) != str(v):
-                        match = False
-                        break
-                elif doc.get(k) != v:
-                    match = False
-                    break
-            if match:
+            if self._match_query(doc, query):
                 if "_id" not in doc and "id" in doc:
                     doc["_id"] = ObjectId(doc["id"])
                 elif "_id" in doc:
@@ -141,18 +205,7 @@ class MockCollection:
         new_docs = []
         deleted = False
         for doc in docs:
-            match = True
-            for k, v in query.items():
-                if k == "_id" or k == "id":
-                    doc_id = str(doc.get("_id", doc.get("id")))
-                    val_id = str(v)
-                    if doc_id != val_id:
-                        match = False
-                        break
-                elif doc.get(k) != v:
-                    match = False
-                    break
-            if match and not deleted:
+            if self._match_query(doc, query) and not deleted:
                 deleted = True
             else:
                 new_docs.append(doc)
@@ -166,18 +219,7 @@ class MockCollection:
         set_dict = update.get("$set", {})
         
         for doc in docs:
-            match = True
-            for k, v in query.items():
-                if k == "_id" or k == "id":
-                    doc_id = str(doc.get("_id", doc.get("id")))
-                    val_id = str(v)
-                    if doc_id != val_id:
-                        match = False
-                        break
-                elif doc.get(k) != v:
-                    match = False
-                    break
-            if match:
+            if self._match_query(doc, query):
                 for uk, uv in set_dict.items():
                     doc[uk] = uv
                 updated = True
@@ -197,22 +239,7 @@ class MockCollection:
         new_docs = []
         deleted_count = 0
         for doc in docs:
-            match = True
-            for k, v in query.items():
-                if k == "_id" or k == "id":
-                    doc_id = str(doc.get("_id", doc.get("id")))
-                    val_id = str(v)
-                    if doc_id != val_id:
-                        match = False
-                        break
-                elif k == "user_id":
-                    if str(doc.get("user_id")) != str(v):
-                        match = False
-                        break
-                elif doc.get(k) != v:
-                    match = False
-                    break
-            if match:
+            if self._match_query(doc, query):
                 deleted_count += 1
             else:
                 new_docs.append(doc)
@@ -227,3 +254,22 @@ class MockDatabase:
     def __init__(self):
         self.users = MockCollection("users")
         self.reports = MockCollection("reports")
+        self.assets = MockCollection("assets")
+        self.inventory = MockCollection("inventory")
+        self.vendors = MockCollection("vendors")
+        self.reminders = MockCollection("reminders")
+        self.meetings = MockCollection("meetings")
+        self.expenses = MockCollection("expenses")
+        self.documents = MockCollection("documents")
+        self.tickets = MockCollection("tickets")
+        self.attendance = MockCollection("attendance")
+        self.leave_balances = MockCollection("leave_balances")
+        self.leave_records = MockCollection("leave_records")
+        self.candidates = MockCollection("candidates")
+        self.interviews = MockCollection("interviews")
+        self.onboarding = MockCollection("onboarding")
+        self.hr_documents = MockCollection("hr_documents")
+        self.policy_acknowledgements = MockCollection("policy_acknowledgements")
+        self.trainings = MockCollection("trainings")
+        self.performance_reviews = MockCollection("performance_reviews")
+        self.feedback = MockCollection("feedback")

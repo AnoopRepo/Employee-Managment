@@ -1,0 +1,24 @@
+[
+  {
+    "id": "int_2001",
+    "candidate_id": "cand_1002",
+    "candidate_name": "Michael Kyle",
+    "interviewer_name": "Anoop Yadav (Engineering)",
+    "date": "2026-05-25T14:00:00.000000",
+    "format": "Technical Round (Zoom)",
+    "meeting_link": "https://zoom.us/j/987654321",
+    "status": "Scheduled",
+    "notes": "Discuss python async patterns, motor collections, and database index strategies."
+  },
+  {
+    "id": "int_2002",
+    "candidate_id": "cand_1001",
+    "candidate_name": "Sarah Connor",
+    "interviewer_name": "Anoop Yadav (Engineering)",
+    "date": "2026-05-23T10:30:00.000000",
+    "format": "System Design Round (Zoom)",
+    "meeting_link": "https://zoom.us/j/123456789",
+    "status": "Scheduled",
+    "notes": "Assess state management patterns, hook optimizations, and server-side layouts."
+  }
+]

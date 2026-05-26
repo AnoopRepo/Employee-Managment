@@ -47,20 +47,29 @@ export const AuthProvider = ({ children }) => {
     restoreSession();
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (email, password, role) => {
     try {
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, role }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.detail || 'Login failed');
+      }
+
+      if (data.otp_required) {
+        return { 
+          success: true, 
+          otpRequired: true, 
+          email: data.email, 
+          simulatedOtp: data.simulated_otp 
+        };
       }
 
       setToken(data.access_token);
@@ -75,14 +84,42 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signup = async (name, email, password, role) => {
+  const verifyOtp = async (email, otp, role) => {
+    try {
+      const response = await fetch(`${API_URL}/api/auth/verify-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, otp, role }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'OTP verification failed');
+      }
+
+      setToken(data.access_token);
+      setUser(data.user);
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      return { success: true };
+    } catch (error) {
+      console.error('OTP verification error:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const signup = async (name, email, password, role, department) => {
     try {
       const response = await fetch(`${API_URL}/api/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, password, role, department }),
       });
 
       const data = await response.json();
@@ -106,7 +143,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, verifyOtp, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

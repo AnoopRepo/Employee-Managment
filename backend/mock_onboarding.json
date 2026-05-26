@@ -1,0 +1,28 @@
+[
+  {
+    "id": "onb_100",
+    "employee_id": "6a0d4c5bfd019034a6416e10",
+    "employee_name": "Anoop Yadav",
+    "tasks": [
+      {"id": "t1", "title": "Submit Identity Proof (Aadhar/Passport)", "completed": true, "due_date": "2026-05-25"},
+      {"id": "t2", "title": "Signed NDA & Employment Agreement", "completed": true, "due_date": "2026-05-25"},
+      {"id": "t3", "title": "Setup Development Environment & Git Access", "completed": false, "due_date": "2026-05-27"},
+      {"id": "t4", "title": "HR Compliance & Anti-Harassment Training", "completed": false, "due_date": "2026-05-30"},
+      {"id": "t5", "title": "Team Meet & Greet Call", "completed": false, "due_date": "2026-05-28"}
+    ],
+    "last_updated": "2026-05-22T10:00:00.000000"
+  },
+  {
+    "id": "onb_101",
+    "employee_id": "6a0e8d7112817bbd568797ff",
+    "employee_name": "John Staff",
+    "tasks": [
+      {"id": "t1", "title": "Submit Identity Proof (Aadhar/Passport)", "completed": true, "due_date": "2026-05-24"},
+      {"id": "t2", "title": "Signed NDA & Employment Agreement", "completed": true, "due_date": "2026-05-24"},
+      {"id": "t3", "title": "Access Setup for Support Desk & Zendesk Portal", "completed": true, "due_date": "2026-05-25"},
+      {"id": "t4", "title": "Customer Support Tone of Voice Course", "completed": false, "due_date": "2026-05-28"},
+      {"id": "t5", "title": "Review Privacy Regulations Policy", "completed": false, "due_date": "2026-05-28"}
+    ],
+    "last_updated": "2026-05-22T10:00:00.000000"
+  }
+]
